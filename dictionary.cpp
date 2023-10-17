@@ -28,7 +28,7 @@ namespace details
     template <class Data>
     struct Node
     {
-        std::weak_ptr<Node> parent;
+        std::shared_ptr<Node> parent;
         std::shared_ptr<Node> left, right;
         COLOR color;
         Data data;
@@ -168,29 +168,24 @@ namespace details
             {
                 if (Compare{}(tmp->data.first, value.first))
                 {
-                    if (tmp->left == nullptr)
-                        break;
+                    if (tmp->left == nullptr) break;
                     tmp = tmp->left;
                 }
                 else if (Compare{}(value.first, tmp->data.first))
                 {
-                    if (tmp->right == nullptr)
-                        break;
+                    if (tmp->right == nullptr) break;
                     tmp = tmp->right;
                 }
-                else
-                    return {nullptr, false}; // NO multi value | MB soon
+                else return {nullptr, false}; // NO multi value | MB soon
             }
 
             if (Compare{}(tmp->data.first, value.first))
-                insertPlace = tmp->left = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
-            else
-                insertPlace = tmp->right = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
+                    insertPlace = tmp->left = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
+            else    insertPlace = tmp->right = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
 
             while (tmp != root)
             {
-                if (tmp->color == COLOR::BLACK)
-                    break;
+                if (tmp->color == COLOR::BLACK) break;
                 // tmp - parent
                 // Red Red conflict
                 if (checkSiblingColor(tmp, value) == COLOR::RED)
@@ -199,8 +194,7 @@ namespace details
                     recolor(tmp->right);
                     recolor(tmp->left);
 
-                    if (tmp == root)
-                        break;
+                    if (tmp == root) break;
                     else
                     {
                         recolor(tmp);
