@@ -28,7 +28,7 @@ namespace details
     template <class Data>
     struct Node
     {
-        std::shared_ptr<Node> parent;
+        std::weak_ptr<Node> parent;
         std::shared_ptr<Node> left, right;
         COLOR color;
         Data data;
@@ -57,7 +57,7 @@ namespace details
 
         COLOR checkSiblingColor(std::shared_ptr<Node<value_type>> node, value_type value) const
         {
-            node = node->parent;
+            node = node->parent.lock();
             if (Compare{}(node->data.first, value.first))
                 node = node->right;
             else
@@ -93,18 +93,18 @@ namespace details
             if (node->right != nullptr)
                 node->right->parent = node;
             newRoot->left = node;
-            if (node->parent == nullptr)
+            if (!node->parent.lock())
             {
                 root = newRoot;
-                newRoot->parent = nullptr;
+                newRoot->parent.reset();
             }
             else
             {
-                if (Compare{}(node->parent->data.first, value.first))
-                    node->parent->left = newRoot;
+                if (Compare{}(node->parent.lock()->data.first, value.first))
+                    node->parent.lock()->left = newRoot;
                 else
-                    node->parent->right = newRoot;
-                newRoot->parent = node->parent;
+                    node->parent.lock()->right = newRoot;
+                newRoot->parent = node->parent.lock();
             }
             node->parent = newRoot;
             return newRoot;
@@ -116,18 +116,18 @@ namespace details
             if (node->left != nullptr)
                 node->left->parent = node;
             newRoot->right = node;
-            if (node->parent == nullptr)
+            if (!node->parent.lock())
             {
                 root = newRoot;
-                newRoot->parent = nullptr;
+                newRoot->parent.reset();
             }
             else
             {
-                if (Compare{}(node->parent->data.first, value.first))
-                    node->parent->left = newRoot;
+                if (Compare{}(node->parent.lock()->data.first, value.first))
+                    node->parent.lock()->left = newRoot;
                 else
-                    node->parent->right = newRoot;
-                newRoot->parent = node->parent;
+                    node->parent.lock()->right = newRoot;
+                newRoot->parent = node->parent.lock();
             }
             node->parent = newRoot;
             return newRoot;
@@ -137,7 +137,7 @@ namespace details
         std::shared_ptr<Node<value_type>> leftmost() const
         {
             if (root == nullptr)
-                nullptr;
+                return nullptr;
             auto tmp = root;
             while (tmp->left)
                 tmp = tmp->left;
@@ -147,7 +147,7 @@ namespace details
         std::shared_ptr<Node<value_type>> rightmost() const
         {
             if (root == nullptr)
-                nullptr;
+                return nullptr;
             auto tmp = root;
             while (tmp->right)
                 tmp = tmp->right;
@@ -168,49 +168,55 @@ namespace details
             {
                 if (Compare{}(tmp->data.first, value.first))
                 {
-                    if (tmp->left == nullptr) break;
+                    if (tmp->left == nullptr)
+                        break;
                     tmp = tmp->left;
                 }
                 else if (Compare{}(value.first, tmp->data.first))
                 {
-                    if (tmp->right == nullptr) break;
+                    if (tmp->right == nullptr)
+                        break;
                     tmp = tmp->right;
                 }
-                else return {nullptr, false}; // NO multi value | MB soon
+                else
+                    return {nullptr, false}; // NO multi value | MB soon
             }
 
             if (Compare{}(tmp->data.first, value.first))
-                    insertPlace = tmp->left = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
-            else    insertPlace = tmp->right = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
+                insertPlace = tmp->left = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
+            else
+                insertPlace = tmp->right = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
 
             while (tmp != root)
             {
-                if (tmp->color == COLOR::BLACK) break;
+                if (tmp->color == COLOR::BLACK)
+                    break;
                 // tmp - parent
                 // Red Red conflict
                 if (checkSiblingColor(tmp, value) == COLOR::RED)
                 {
-                    tmp = tmp->parent;
+                    tmp = tmp->parent.lock();
                     recolor(tmp->right);
                     recolor(tmp->left);
 
-                    if (tmp == root) break;
+                    if (tmp == root)
+                        break;
                     else
                     {
                         recolor(tmp);
-                        tmp = tmp->parent;
+                        tmp = tmp->parent.lock();
                     }
                 }
                 else
                 {
-                    tmp = tmp->parent; // grandpa
+                    tmp = tmp->parent.lock(); // grandpa
 
                     switch (way(tmp, value))
                     {
                     case WAYS::LR:
                         tmp = tmp->left;
                         tmp = leftRotation(tmp, value);
-                        tmp = tmp->parent;
+                        tmp = tmp->parent.lock();
                         tmp = rightRotation(tmp, value);
                         recolor(tmp);
                         recolor(tmp->right);
@@ -218,7 +224,7 @@ namespace details
                     case WAYS::RL:
                         tmp = tmp->right;
                         tmp = rightRotation(tmp, value);
-                        tmp = tmp->parent;
+                        tmp = tmp->parent.lock();
                         tmp = leftRotation(tmp, value);
                         recolor(tmp);
                         recolor(tmp->left);
@@ -288,10 +294,10 @@ namespace details
             else
             {
                 endminus1 = iter;
-                while ((iter->parent != nullptr) && Compare{}(iter->data.first, iter->parent->data.first))
-                    iter = iter->parent;
+                while ((iter->parent.lock() != nullptr) && Compare{}(iter->data.first, iter->parent.lock()->data.first))
+                    iter = iter->parent.lock();
 
-                iter = iter->parent;
+                iter = iter->parent.lock();
             }
             return *this;
         }
@@ -318,10 +324,10 @@ namespace details
             }
             else
             {
-                while ((iter->parent != nullptr) && !Compare{}(iter->data.first, iter->parent->data.first))
-                    iter = iter->parent;
+                while ((iter->parent.lock() != nullptr) && !Compare{}(iter->data.first, iter->parent.lock()->data.first))
+                    iter = iter->parent.lock();
 
-                iter = iter->parent;
+                iter = iter->parent.lock();
             }
             return *this;
         }
@@ -365,7 +371,7 @@ private:
 public:
     using RBT = details::RedBlackTree<Key, T, Compare>;
 
-    dictionary() 
+    dictionary()
         : size_(0) {}
 
     dictionary(std::initializer_list<value_type> &&list)
