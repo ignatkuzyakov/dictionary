@@ -10,418 +10,394 @@ class not_found_exception;
 
 namespace details
 {
-
-    enum COLOR
-    {
-        RED,
-        BLACK
-    };
-
-    enum WAYS
-    {
-        LR = 12,
-        RL = 21,
-        RR = 22,
-        LL = 11
-    };
-
-    template <class Data>
-    struct Node
-    {
-        std::weak_ptr<Node> parent;
-        std::shared_ptr<Node> left, right;
-        COLOR color;
-        Data data;
-
-        Node(
-            std::shared_ptr<Node> parent,
-            std::shared_ptr<Node> left,
-            std::shared_ptr<Node> right,
-            COLOR color,
-            Data data)
-            : parent(parent), left(left), right(right), color(color), data(data) {}
-    };
-
-    template <class Key, class T, class Compare>
-    class RedBlackTree
+    template <class Key, class T, class Compare = std::greater<Key>>
+    class dictionary
     {
     private:
-        using value_type = std::pair<const Key, T>;
+        template <class Data> class Node;
 
-        std::shared_ptr<Node<value_type>> root = nullptr;
+    public:
+        class Iterator;
 
-        void recolor(std::shared_ptr<Node<value_type>> node)
+        using key_type = Key;
+        using dicted_type = T;
+        using value_type = std::pair<const key_type, dicted_type>;
+        using node_ptr = std::shared_ptr<Node<value_type>>;
+        using Myt_ = dictionary<Key, T, Compare>;
+        using key_compare = Compare;
+        using reference = value_type &;
+        using const_reference = const value_type &;
+        using pointer = std::shared_ptr<value_type>;
+        using const_pointer = const std::shared_ptr<value_type>;
+        using size_type = std::size_t;
+        using difference_type = std::ptrdiff_t;
+
+        using iterator = Iterator;
+        using const_iterator = const iterator;
+
+        using reverse_iterator = std::reverse_iterator<iterator>;
+        using const_reverse_iterator = std::reverse_iterator<const_iterator>;
+
+    private:
+        enum COLOR { RED, BLACK };
+
+        enum WAYS { LR = 12, RL = 21, RR = 22, LL = 11 };
+
+        node_ptr root = nullptr;
+
+        static constexpr Compare compare{};
+
+        template <class Data>
+        struct Node
+        {
+            std::weak_ptr<Node> parent__;
+            std::shared_ptr<Node> left__, right__;
+            COLOR color;
+            Data data;
+
+            Node(
+                std::shared_ptr<Node> parent,
+                std::shared_ptr<Node> left,
+                std::shared_ptr<Node> right,
+                COLOR color,
+                Data data)
+                : parent__(parent), left__(left), right__(right), color(color), data(data) {}
+        };
+
+    public:
+        class Iterator
+        {
+
+            node_ptr iter;
+            node_ptr lastelem; // TODO rm
+
+        public:
+            using difference_type = std::ptrdiff_t;
+            using iterator_category = std::bidirectional_iterator_tag;
+            using pointer = std::shared_ptr<value_type>;
+            using reference = value_type &;
+
+            node_ptr lefter(node_ptr node) const
+            {
+                if (!node) return nullptr;
+                while (node->left__)
+                    node = node->left__;
+                return node;
+            }
+
+            node_ptr righter(node_ptr node) const
+            {
+                if (!node) return nullptr;
+                while (node->right__)
+                    node = node->right__;
+                return node;
+            }
+
+        public:
+            Iterator() = default;
+            explicit Iterator(node_ptr node) : iter(node) {}
+
+            reference operator*() const { return iter->data; }
+
+            Iterator &operator++()
+            {
+                if (iter->right__ != nullptr)
+                {
+                    iter = iter->right__;
+                    iter = lefter(iter);
+                }
+                else
+                {
+                    lastelem = iter;
+                    while ((iter->parent__.lock() != nullptr) && compare(iter->data.first, iter->parent__.lock()->data.first))
+                        iter = iter->parent__.lock();
+                    iter = iter->parent__.lock();
+                }
+                return *this;
+            }
+            Iterator operator++(int)
+            {
+                auto tmp = *this;
+                this->operator++();
+                return tmp;
+            }
+
+            Iterator &operator--()
+            {
+                if (iter == nullptr)
+                    iter = lastelem;
+                else if (iter->left__ != nullptr)
+                {
+                    iter = iter->left__;
+                    iter = righter(iter);
+                }
+                else
+                {
+                    while ((iter->parent__.lock() != nullptr) && !compare(iter->data.first, iter->parent__.lock()->data.first))
+                        iter = iter->parent__.lock();
+                    iter = iter->parent__.lock();
+                }
+                return *this;
+            }
+
+            Iterator operator--(int)
+            {
+                auto tmp = *this;
+                this->operator--();
+                return tmp;
+            }
+
+            bool operator==(const Iterator &rhs) const { return iter == rhs.iter; }
+            bool operator!=(const Iterator &rhs) const { return iter != rhs.iter; }
+        };
+
+    private:
+        void recolor(node_ptr node)
         {
             node->color = (node->color == COLOR::RED) ? COLOR::BLACK : COLOR::RED;
         }
 
-        COLOR checkSiblingColor(std::shared_ptr<Node<value_type>> node, value_type value) const
+        COLOR checkSiblingColor(node_ptr node, value_type value) const
         {
-            node = node->parent.lock();
-            if (Compare{}(node->data.first, value.first))
-                node = node->right;
+            node = node->parent__.lock();
+            if (compare(node->data.first, value.first))
+                node = node->right__;
             else
-                node = node->left;
+                node = node->left__;
             if (node == nullptr)
                 return COLOR::BLACK;
             return node->color;
         }
 
-        WAYS way(std::shared_ptr<Node<value_type>> node, value_type value) const
+        WAYS way(node_ptr node, value_type value) const
         {
             int RES = 0;
             for (int i = 1; i >= 0; --i)
             {
-                if (Compare{}(node->data.first, value.first))
+                if (compare(node->data.first, value.first))
                 {
                     RES += std::pow(10, i) * 1;
-                    node = node->left;
+                    node = node->left__;
                 }
                 else
                 {
                     RES += std::pow(10, i) * 2;
-                    node = node->right;
+                    node = node->right__;
                 }
             }
 
             return WAYS(RES);
         }
-        std::shared_ptr<Node<value_type>> leftRotation(std::shared_ptr<Node<value_type>> node, value_type value) // nodegrandpa
+        node_ptr leftRotation(node_ptr node, value_type value) // nodegrandpa
         {
-            auto newRoot = node->right;
-            node->right = newRoot->left;
-            if (node->right != nullptr)
-                node->right->parent = node;
-            newRoot->left = node;
-            if (!node->parent.lock())
+            auto newRoot = node->right__;
+            node->right__ = newRoot->left__;
+            if (node->right__ != nullptr)
+                node->right__->parent__ = node;
+            newRoot->left__ = node;
+            if (!node->parent__.lock())
             {
                 root = newRoot;
-                newRoot->parent.reset();
+                newRoot->parent__.reset();
             }
             else
             {
-                if (Compare{}(node->parent.lock()->data.first, value.first))
-                    node->parent.lock()->left = newRoot;
+                if (compare(node->parent__.lock()->data.first, value.first))
+                    node->parent__.lock()->left__ = newRoot;
                 else
-                    node->parent.lock()->right = newRoot;
-                newRoot->parent = node->parent.lock();
+                    node->parent__.lock()->right__ = newRoot;
+                newRoot->parent__ = node->parent__.lock();
             }
-            node->parent = newRoot;
+            node->parent__ = newRoot;
             return newRoot;
         }
-        std::shared_ptr<Node<value_type>> rightRotation(std::shared_ptr<Node<value_type>> node, value_type value)
+        node_ptr rightRotation(node_ptr node, value_type value)
         {
-            auto newRoot = node->left;
-            node->left = newRoot->right;
-            if (node->left != nullptr)
-                node->left->parent = node;
-            newRoot->right = node;
-            if (!node->parent.lock())
+            auto newRoot = node->left__;
+            node->left__ = newRoot->right__;
+            if (node->left__ != nullptr)
+                node->left__->parent__ = node;
+            newRoot->right__ = node;
+            if (!node->parent__.lock())
             {
                 root = newRoot;
-                newRoot->parent.reset();
+                newRoot->parent__.reset();
             }
             else
             {
-                if (Compare{}(node->parent.lock()->data.first, value.first))
-                    node->parent.lock()->left = newRoot;
+                if (compare(node->parent__.lock()->data.first, value.first))
+                    node->parent__.lock()->left__ = newRoot;
                 else
-                    node->parent.lock()->right = newRoot;
-                newRoot->parent = node->parent.lock();
+                    node->parent__.lock()->right__ = newRoot;
+                newRoot->parent__ = node->parent__.lock();
             }
-            node->parent = newRoot;
+            node->parent__ = newRoot;
             return newRoot;
         }
 
-    protected:
-        std::shared_ptr<Node<value_type>> leftmost() const
+        std::pair<node_ptr, node_ptr *const> find(node_ptr node, const value_type &value) const
         {
-            if (root == nullptr)
-                return nullptr;
-            auto tmp = root;
-            while (tmp->left)
-                tmp = tmp->left;
-            return tmp;
+            while (node != nullptr)
+            {
+                if (compare(node->data.first, value.first))
+                {
+                    if (node->left__ == nullptr)
+                        return {node, &node->left__};
+                    node = node->left__;
+                }
+                else if (compare(value.first, node->data.first))
+                {
+                    if (node->right__ == nullptr)
+                        return {node, &node->right__};
+                    node = node->right__;
+                }
+                else
+                    break;
+            }
+            return {node, nullptr};
         }
 
-        std::shared_ptr<Node<value_type>> rightmost() const
+        node_ptr leftmost() const
         {
-            if (root == nullptr)
-                return nullptr;
-            auto tmp = root;
-            while (tmp->right)
-                tmp = tmp->right;
-            return tmp;
+            auto node = root;
+            while (node->left__)
+                node = node->left__;
+            return node;
         }
 
-        std::pair<std::shared_ptr<Node<value_type>>, bool> insert(value_type &&value)
+        node_ptr rightmost() const
+        {
+            auto node = root;
+            while (node->right__)
+                node = node->right__;
+            return node;
+        }
+
+    private:
+        size_type size_;
+
+    public:
+        std::pair<iterator, bool> insert(value_type &&value)
         {
             if (root == nullptr)
             {
                 root = std::make_shared<Node<value_type>>(nullptr, nullptr, nullptr, COLOR::BLACK, value);
-                return {root, true};
-            }
-            auto tmp = root;
-            std::shared_ptr<Node<value_type>> insertPlace;
-
-            while (tmp != nullptr)
-            {
-                if (Compare{}(tmp->data.first, value.first))
-                {
-                    if (tmp->left == nullptr)
-                        break;
-                    tmp = tmp->left;
-                }
-                else if (Compare{}(value.first, tmp->data.first))
-                {
-                    if (tmp->right == nullptr)
-                        break;
-                    tmp = tmp->right;
-                }
-                else
-                    return {nullptr, false}; // NO multi value | MB soon
+                return {iterator(root), true};
             }
 
-            if (Compare{}(tmp->data.first, value.first))
-                insertPlace = tmp->left = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
-            else
-                insertPlace = tmp->right = std::make_shared<Node<value_type>>(tmp, nullptr, nullptr, COLOR::RED, value);
+            auto tmp = find(root, value);
+            node_ptr node = tmp.first;
+            *tmp.second = std::make_shared<Node<value_type>>(node, nullptr, nullptr, COLOR::RED, value);
+            auto insertPlace = *tmp.second;
 
-            while (tmp != root)
+            while (node != root)
             {
-                if (tmp->color == COLOR::BLACK)
-                    break;
-                // tmp - parent
+                if (node->color == COLOR::BLACK) break;
                 // Red Red conflict
-                if (checkSiblingColor(tmp, value) == COLOR::RED)
+                if (checkSiblingColor(node, value) == COLOR::RED)
                 {
-                    tmp = tmp->parent.lock();
-                    recolor(tmp->right);
-                    recolor(tmp->left);
+                    node = node->parent__.lock();
+                    recolor(node->right__);
+                    recolor(node->left__);
 
-                    if (tmp == root)
-                        break;
+                    if (node == root) break;
                     else
                     {
-                        recolor(tmp);
-                        tmp = tmp->parent.lock();
+                        recolor(node);
+                        node = node->parent__.lock();
                     }
                 }
                 else
                 {
-                    tmp = tmp->parent.lock(); // grandpa
+                    node = node->parent__.lock(); // grandpa
 
-                    switch (way(tmp, value))
+                    switch (way(node, value))
                     {
                     case WAYS::LR:
-                        tmp = tmp->left;
-                        tmp = leftRotation(tmp, value);
-                        tmp = tmp->parent.lock();
-                        tmp = rightRotation(tmp, value);
-                        recolor(tmp);
-                        recolor(tmp->right);
+                        node = node->left__;
+                        node = leftRotation(node, value);
+                        node = node->parent__.lock();
+                        node = rightRotation(node, value);
+                        recolor(node);
+                        recolor(node->right__);
                         break;
                     case WAYS::RL:
-                        tmp = tmp->right;
-                        tmp = rightRotation(tmp, value);
-                        tmp = tmp->parent.lock();
-                        tmp = leftRotation(tmp, value);
-                        recolor(tmp);
-                        recolor(tmp->left);
+                        node = node->right__;
+                        node = rightRotation(node, value);
+                        node = node->parent__.lock();
+                        node = leftRotation(node, value);
+                        recolor(node);
+                        recolor(node->left__);
                         break;
                     case WAYS::RR:
-                        tmp = leftRotation(tmp, value);
-                        recolor(tmp);
-                        recolor(tmp->left);
+                        node = leftRotation(node, value);
+                        recolor(node);
+                        recolor(node->left__);
                         break;
                     case WAYS::LL:
-                        tmp = rightRotation(tmp, value);
-                        recolor(tmp);
-                        recolor(tmp->right);
+                        node = rightRotation(node, value);
+                        recolor(node);
+                        recolor(node->right__);
                         break;
                     }
                     break;
                 }
             }
-            return {insertPlace, true};
+            ++size_;
+            return {iterator(insertPlace), true};
         }
 
-        std::pair<std::shared_ptr<Node<value_type>>, bool> is_set(const Key &key) const
+        std::pair<iterator, bool> is_set(const Key &key) const
         {
-            auto tmp = root;
-            while (tmp != nullptr)
-            {
-                if (Compare{}(tmp->data.first, key))
-                    tmp = tmp->left;
-                else if (Compare{}(key, tmp->data.first))
-                    tmp = tmp->right;
-                else
-                    return {tmp, true};
-            }
-            return {{nullptr}, false};
+            value_type val = {key, T{}};
+            auto checker = find(root, val);
+            if (checker.second == nullptr)
+                return {iterator(checker.first), true};
+            else
+                return {iterator(*checker.second), false};
         }
-    };
-
-    template <typename Data, typename Compare>
-    class RedBlackTreeIter
-    {
-    public:
-        using value_type = Data;
-        using difference_type = std::ptrdiff_t;
-        using pointer = std::shared_ptr<value_type>;
-        using reference = value_type &;
-        using iterator_category = std::bidirectional_iterator_tag;
-
-    private:
-        std::shared_ptr<Node<value_type>> iter;
-        std::shared_ptr<Node<value_type>> endminus1;
 
     public:
-        RedBlackTreeIter() = default;
-        explicit RedBlackTreeIter(std::shared_ptr<Node<value_type>> node) : iter(node) {}
+        dictionary()
+            : size_(0) {}
 
-        reference operator*() const { return iter->data; }
-
-        RedBlackTreeIter &operator++()
+        dictionary(std::initializer_list<value_type> &&list)
         {
-            if (iter->right != nullptr)
-            {
-                iter = iter->right;
+            for (auto x : list)
+                if (insert(std::move(x)).second) 
+                    ++size_;
+        }
 
-                while (iter->left != nullptr)
-                    iter = iter->left;
-            }
+        size_type size() const noexcept { return size_; }
+        bool empty() const noexcept { return !size_; }
+        iterator begin() const { return iterator(leftmost()); }
+        iterator end() const { return iterator(nullptr); }
+
+        T get(const Key &key) const
+        {
+            auto result = is_set(key);
+            if (result.second)
+                return (*result.first).second;
+            else
+                throw not_found_exception<Key>(key);
+        }
+
+        T &operator[](const Key &key)
+        {
+            auto result = is_set(key);
+            if (result.second)
+                return (*result.first).second;
             else
             {
-                endminus1 = iter;
-                while ((iter->parent.lock() != nullptr) && Compare{}(iter->data.first, iter->parent.lock()->data.first))
-                    iter = iter->parent.lock();
-
-                iter = iter->parent.lock();
+                auto node = insert({key, {}});
+                auto &&tmp = (*node.first).second;
+                ++size_;
+                return tmp;
             }
-            return *this;
         }
-        RedBlackTreeIter operator++(int)
-        {
-            auto tmp = *this;
-            this->operator++();
-            return tmp;
-        }
-
-        RedBlackTreeIter &operator--()
-        {
-            if (iter == nullptr)
-            {
-                iter = endminus1;
-                return *this;
-            }
-            if (iter->left != nullptr)
-            {
-                iter = iter->left;
-
-                while (iter->right != nullptr)
-                    iter = iter->right;
-            }
-            else
-            {
-                while ((iter->parent.lock() != nullptr) && !Compare{}(iter->data.first, iter->parent.lock()->data.first))
-                    iter = iter->parent.lock();
-
-                iter = iter->parent.lock();
-            }
-            return *this;
-        }
-
-        RedBlackTreeIter operator--(int)
-        {
-            auto tmp = *this;
-            this->operator--();
-            return tmp;
-        }
-
-        bool operator==(const RedBlackTreeIter &rhs) { return iter == rhs.iter; }
-        bool operator!=(const RedBlackTreeIter &rhs) { return iter != rhs.iter; }
     };
 
 }
-
-template <class Key, class T, class Compare = std::greater<Key>>
-class dictionary : public details::RedBlackTree<Key, T, Compare>
-{
-public:
-    using Myt_ = dictionary<Key, T, Compare>;
-    using key_type = Key;
-    using dicted_type = T;
-    using value_type = std::pair<const key_type, dicted_type>;
-    using key_compare = Compare;
-    using reference = value_type &;
-    using const_reference = const value_type &;
-    using pointer = std::shared_ptr<value_type>;
-    using const_pointer = const std::shared_ptr<value_type>;
-    using size_type = std::size_t;
-    using difference_type = std::ptrdiff_t;
-    using iterator = details::RedBlackTreeIter<value_type, Compare>;
-    using const_iterator = details::RedBlackTreeIter<const value_type, Compare>;
-    using reverse_iterator = std::reverse_iterator<iterator>;
-    using const_reverse_iterator = std::reverse_iterator<const_iterator>;
-
-private:
-    size_type size_;
-
-public:
-    using RBT = details::RedBlackTree<Key, T, Compare>;
-
-    dictionary()
-        : size_(0) {}
-
-    dictionary(std::initializer_list<value_type> &&list)
-    {
-        for (auto x : list)
-            if (insert(std::move(x)).second)
-                ++size_;
-    }
-
-    size_type size() const noexcept { return size_; }
-    bool empty() const noexcept { return !size_; }
-    iterator begin() const { return iterator(RBT::leftmost()); }
-    iterator end() const { return iterator(nullptr); }
-
-    T get(const Key &key) const
-    {
-        auto result = RBT::is_set(key);
-        if (result.second)
-            return result.first->data.second;
-        else
-            throw not_found_exception<Key>(key);
-    }
-
-    T &operator[](const Key &key)
-    {
-        auto result = RBT::is_set(key);
-        if (result.second)
-            return result.first->data.second;
-        else
-        {
-            auto &&tmp = RBT::insert({key, {}}).first->data.second;
-            ++size_;
-            return tmp;
-        }
-    }
-
-    std::pair<iterator, bool> insert(value_type &&value)
-    {
-        auto result = RBT::insert(std::forward<value_type>(value));
-        if (result.second)
-            ++size_;
-        return {iterator(result.first), result.second};
-    }
-
-    std::pair<iterator, bool> is_set(const Key &key) const
-    {
-        auto result = RBT::is_set(key);
-        return {iterator(result.first), result.second};
-    }
-};
 
 template <class Key>
 class not_found_exception : public std::exception
@@ -438,8 +414,8 @@ const Key &not_found_exception<Key>::get_key() const noexcept { return key; }
 
 int main(int argc, char const *argv[])
 {
-    dictionary<int, int> dict;
-    dictionary<int, int> dictFromInit = {{10, 1}, {292, 3}, {8282, 2}};
+    details::dictionary<int, int> dict;
+    details::dictionary<int, int> dictFromInit = {{10, 1}, {292, 3}, {8282, 2}};
 
     for (const auto [key, value] : dictFromInit)
         std::cout << "key: " << key << " value: " << value << std::endl;
@@ -456,8 +432,7 @@ int main(int argc, char const *argv[])
     dict.insert({2, 1});
     dict.insert({1, 1});
 
-    dict.insert({30, 1}); // no multivalues
-    dictionary<int, int>::iterator it = dict.begin();
+    details::dictionary<int, int>::iterator it = dict.begin();
 
     dict[1000] = 3;
     dict[1000] = 20;
